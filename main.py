@@ -4,10 +4,10 @@ import os
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
-from functions.get_files_info import schema_get_files_info
-from functions.get_file_content import schema_get_file_content
-from functions.run_python_file import schema_run_python_file
-from functions.write_file import schema_write_file
+from functions.get_files_info import schema_get_files_info, get_files_info
+from functions.get_file_content import schema_get_file_content, get_file_content
+from functions.run_python_file import schema_run_python_file, run_python_file
+from functions.write_file import schema_write_file, write_file
 
 
 def parse_arguments():
@@ -25,6 +25,65 @@ def print_verbose(prompt: str, response: types.GenerateContentResponse):
     print(f"User prompt: {prompt}")
     print(f"Prompt tokens: {response.usage_metadata.prompt_token_count}")
     print(f"Response tokens: {response.usage_metadata.candidates_token_count}")
+
+
+def call_function(function_call_part, verbose=False):
+    """Handle calling one of our four functions based on the function call from the LLM"""
+    
+    # Dictionary mapping function names to actual functions
+    available_functions = {
+        "get_files_info": get_files_info,
+        "get_file_content": get_file_content,
+        "run_python_file": run_python_file,
+        "write_file": write_file,
+    }
+    
+    function_name = function_call_part.name
+    function_args = dict(function_call_part.args)
+    
+    # Print function call info
+    if verbose:
+        print(f"Calling function: {function_name}({function_args})")
+    else:
+        print(f" - Calling function: {function_name}")
+    
+    # Check if function exists
+    if function_name not in available_functions:
+        return types.Content(
+            role="tool",
+            parts=[
+                types.Part.from_function_response(
+                    name=function_name,
+                    response={"error": f"Unknown function: {function_name}"},
+                )
+            ],
+        )
+    
+    # Add working directory to arguments
+    function_args["working_directory"] = "./calculator"
+    
+    # Call the function
+    try:
+        function_result = available_functions[function_name](**function_args)
+        return types.Content(
+            role="tool",
+            parts=[
+                types.Part.from_function_response(
+                    name=function_name,
+                    response={"result": function_result},
+                )
+            ],
+        )
+    except Exception as e:
+        return types.Content(
+            role="tool",
+            parts=[
+                types.Part.from_function_response(
+                    name=function_name,
+                    response={"error": f"Error calling {function_name}: {str(e)}"},
+                )
+            ],
+        )
 
 
 def main():
@@ -75,7 +134,19 @@ All paths you provide should be relative to the working directory. You do not ne
         for part in response.candidates[0].content.parts:
             if hasattr(part, 'function_call') and part.function_call:
                 function_call_part = part.function_call
-                print(f"Calling function: {function_call_part.name}({function_call_part.args})")
+                function_call_result = call_function(function_call_part, verbose=args.verbose)
+                
+                # Validate the response structure
+                if not (hasattr(function_call_result, 'parts') and 
+                       len(function_call_result.parts) > 0 and 
+                       hasattr(function_call_result.parts[0], 'function_response') and
+                       hasattr(function_call_result.parts[0].function_response, 'response')):
+                    raise RuntimeError("Invalid function call result structure")
+                
+                # Print result if verbose
+                if args.verbose:
+                    print(f"-> {function_call_result.parts[0].function_response.response}")
+                    
             elif hasattr(part, 'text') and part.text:
                 print(part.text)
 
