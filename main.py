@@ -1,13 +1,33 @@
 import os
 from dotenv import load_dotenv
 from google import genai
-import sys
+from google.genai import types
+import argparse
+
+
+def parse_arguments():
+    """Parse command-line arguments"""
+    parser = argparse.ArgumentParser()
+    parser.add_argument("user_prompt", type=str, help="your prompt here")
+    parser.add_argument(
+        "-v", "--verbose", action="store_true", help="see detailed output"
+    )
+
+    return parser.parse_args()
+
+
+def print_verbose(prompt: str, response: types.GenerateContentResponse):
+    print(f"User prompt: {prompt}")
+    print(f"Prompt tokens: {response.usage_metadata.prompt_token_count}")
+    print(f"Response tokens: {response.usage_metadata.candidates_token_count}")
+
 
 def main():
-    args = sys.argv
+    args = parse_arguments()
 
-    if len(args) <= 1:
-        raise Exception("no prompt provided")
+    messages = [
+        types.Content(role="user", parts=[types.Part(text=args.user_prompt)]),
+    ]
 
     load_dotenv()
 
@@ -17,14 +37,13 @@ def main():
 
     response = client.models.generate_content(
         model="gemini-2.0-flash-001",
-        contents=args[1],
+        contents=messages,
     )
 
     print(response.text)
 
-    print(
-        f"Prompt tokens: {response.usage_metadata.prompt_token_count}\nResponse tokens: {response.usage_metadata.candidates_token_count}"
-    )
+    if args.verbose:
+        print_verbose(args.user_prompt, response)
 
 
 if __name__ == "__main__":
