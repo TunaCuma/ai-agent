@@ -1,5 +1,6 @@
 import os
 
+
 def get_files_info(working_directory: str, directory="."):
     """A tool call function for an AI agent to use"""
     try:
