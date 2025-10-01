@@ -1,6 +1,7 @@
 import os
 
 from config import MAX_CHARS
+from google.genai.models import types
 
 
 
@@ -25,3 +26,19 @@ def get_file_content(working_directory: str, file_path: str):
         return f"Error: An OSError has occured: {e}"
     except Exception as e:
         return f"Error: {e}"
+
+
+schema_get_file_content = types.FunctionDeclaration(
+    name="get_file_content",
+    description="Reads and returns the content of a specified file, constrained to the working directory.",
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "file_path": types.Schema(
+                type=types.Type.STRING,
+                description="The path to the file to read, relative to the working directory.",
+            ),
+        },
+        required=["file_path"],
+    ),
+)

@@ -1,6 +1,8 @@
 import os
 import subprocess
 
+from google.genai.models import types
+
 def run_python_file(working_directory: str, file_path: str, args=[]):
     """A tool call function for an AI agent to use"""
     try:
@@ -50,3 +52,24 @@ def run_python_file(working_directory: str, file_path: str, args=[]):
         return "Error: executing Python file: Process timed out after 30 seconds"
     except Exception as e:
         return f"Error: executing Python file: {e}"
+
+
+schema_run_python_file = types.FunctionDeclaration(
+    name="run_python_file",
+    description="Executes a Python file with optional command-line arguments, constrained to the working directory.",
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "file_path": types.Schema(
+                type=types.Type.STRING,
+                description="The path to the Python file to execute, relative to the working directory.",
+            ),
+            "args": types.Schema(
+                type=types.Type.ARRAY,
+                description="Optional command-line arguments to pass to the Python file.",
+                items=types.Schema(type=types.Type.STRING),
+            ),
+        },
+        required=["file_path"],
+    ),
+)
