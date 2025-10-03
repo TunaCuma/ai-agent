@@ -28,7 +28,7 @@ def print_verbose(prompt: str, response: types.GenerateContentResponse):
 
 
 def call_function(function_call_part, verbose=False):
-    """Handle calling one of our four functions based on the function call from the LLM"""
+    """Handle calling one of the functions based on the function call from the LLM"""
     
     # Dictionary mapping function names to actual functions
     available_functions = {
@@ -50,7 +50,7 @@ def call_function(function_call_part, verbose=False):
     # Check if function exists
     if function_name not in available_functions:
         return types.Content(
-            role="tool",
+            role="user",
             parts=[
                 types.Part.from_function_response(
                     name=function_name,
@@ -66,7 +66,7 @@ def call_function(function_call_part, verbose=False):
     try:
         function_result = available_functions[function_name](**function_args)
         return types.Content(
-            role="tool",
+            role="user",
             parts=[
                 types.Part.from_function_response(
                     name=function_name,
@@ -76,7 +76,7 @@ def call_function(function_call_part, verbose=False):
         )
     except Exception as e:
         return types.Content(
-            role="tool",
+            role="user",
             parts=[
                 types.Part.from_function_response(
                     name=function_name,
@@ -95,7 +95,10 @@ def main():
 
     load_dotenv()
 
-    api_key = os.environ.get("GEMINI_API_KEY")
+    api_key: str = os.environ.get("GEMINI_API_KEY")
+
+    if not api_key:
+        raise Exception("No API key found")
 
     client = genai.Client(api_key=api_key)
 
@@ -121,34 +124,68 @@ All paths you provide should be relative to the working directory. You do not ne
         ]
     )
 
-    response = client.models.generate_content(
-        model="gemini-2.0-flash-001",
-        contents=messages,
-        config=types.GenerateContentConfig(
-            tools=[available_functions], system_instruction=system_prompt
-        ),
-    )
-
-    # Check if the LLM made function calls
-    if response.candidates and response.candidates[0].content.parts:
-        for part in response.candidates[0].content.parts:
-            if hasattr(part, 'function_call') and part.function_call:
-                function_call_part = part.function_call
-                function_call_result = call_function(function_call_part, verbose=args.verbose)
-                
-                # Validate the response structure
-                if not (hasattr(function_call_result, 'parts') and 
-                       len(function_call_result.parts) > 0 and 
-                       hasattr(function_call_result.parts[0], 'function_response') and
-                       hasattr(function_call_result.parts[0].function_response, 'response')):
-                    raise RuntimeError("Invalid function call result structure")
-                
-                # Print result if verbose
-                if args.verbose:
-                    print(f"-> {function_call_result.parts[0].function_response.response}")
+    # Main feedback loop
+    max_iterations = 20
+    
+    for iteration in range(max_iterations):
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.0-flash-001",
+                contents=messages,
+                config=types.GenerateContentConfig(
+                    tools=[available_functions], system_instruction=system_prompt
+                ),
+            )
+            
+            # Check if we have a final text response (agent is done)
+            # Only check response.text if there are no function calls to avoid warnings
+            has_function_calls = False
+            if response.candidates:
+                for candidate in response.candidates:
+                    if candidate.content.parts:
+                        for part in candidate.content.parts:
+                            if hasattr(part, 'function_call') and part.function_call:
+                                has_function_calls = True
+                                break
+                    if has_function_calls:
+                        break
+            
+            # If no function calls, check for final text response
+            if not has_function_calls and response.text:
+                print(response.text)
+                break
+            
+            # Process each candidate response
+            if response.candidates:
+                for candidate in response.candidates:
+                    # Add the model's response to the conversation
+                    messages.append(candidate.content)
                     
-            elif hasattr(part, 'text') and part.text:
-                print(part.text)
+                    # Process all parts in the response (text and function calls)
+                    if candidate.content.parts:
+                        for part in candidate.content.parts:
+                            # Handle text parts (agent commentary)
+                            if hasattr(part, 'text') and part.text:
+                                print(part.text)
+                            
+                            # Handle function calls
+                            elif hasattr(part, 'function_call') and part.function_call:
+                                # Call the function
+                                function_call_result = call_function(part.function_call, verbose=args.verbose)
+                                
+                                # Add the function result to the conversation
+                                messages.append(function_call_result)
+                                
+                                # Print result if verbose
+                                if args.verbose:
+                                    print(f"-> {function_call_result.parts[0].function_response.response}")
+            
+        except Exception as e:
+            print(f"Error in iteration {iteration + 1}: {str(e)}")
+            break
+    
+    else:
+        print("Maximum iterations reached (20). Agent may not have completed the task.")
 
     if args.verbose:
         print_verbose(args.user_prompt, response)
