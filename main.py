@@ -114,7 +114,7 @@ def call_function(function_call_part, verbose=False):
     try:
         function_result = available_functions[function_name](**function_args)
         if not verbose:
-            print(f"   ✅ Completed")
+            print(f"   ✅ Completed\n")
         return types.Content(
             role="user",
             parts=[
@@ -197,7 +197,7 @@ def process_user_message(user_message: str, messages: list, client, available_fu
                                 
                                 # Print result if verbose
                                 if verbose:
-                                    print(f"✅ Result: {function_call_result.parts[0].function_response.response}")
+                                    print(f"✅ Result: {function_call_result.parts[0].function_response.response}\n")
             
         except Exception as e:
             print(f"❌ Error in iteration {iteration + 1}: {str(e)}")
