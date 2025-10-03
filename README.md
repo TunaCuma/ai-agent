@@ -34,3 +34,9 @@ uv run calculator/main.py "3 + 7 * 2"
 ```bash
 uv run main.py "fix the bug in my calculator project with your available tools, this gives incorrect output 3 + 7 * 2"
 ```
+
+## REPL mode
+
+```bash
+uv run main.py
+```
