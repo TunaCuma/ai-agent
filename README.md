@@ -2,11 +2,13 @@
 
 ## Installation
 
-install packages
+Install packages
 
 ```bash
 uv sync
 ```
+
+Create an .env file and add your gemini key in it, you can copy example.env file for a template.
 
 ## Demo
 
